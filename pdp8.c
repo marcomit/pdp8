@@ -1,4 +1,5 @@
 #include "pdp8.h"
+#include "tokenizer.h"
 #include <ctype.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,56 +17,65 @@ void free_pdp8_emul(pdp8_emul *emulator) {
   free(emulator);
 }
 
-static uint16_t evaluate_expr(char *c) {
-  // Memory Referenced Instructions (MRI)
-  char *mri[7] = {
-      "AND", // 001
-      "ADD", // 010
-      "LDA", // 011
-      "STA", // 100
-      "BUN", // 101
-      "BSA", // 110
-      "ISZ"  // 111
-  };
-  for (int i = 0; i < 7; i++) {
-    if (strcmp(mri[i], c)) {
-      return i;
-    }
+static void add_opr(pdp8_emul *emul, pdp8_instr *instruction) {
+  if (!emul->instructions) {
+    emul->instructions = instruction;
   }
-
-  return 0;
+  if (!emul->tail) {
+    emul->tail = instruction;
+  } else {
+    emul->tail->next = instruction;
+    emul->tail = emul->tail->next;
+  }
 }
 
-static int is_important(char c) { return isalnum(c) || c == ','; }
+static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
+  TokenType mri[] = {AND, ADD, LDA, STA, BUN, BSA, ISZ};
+  pdp8_instr *instr = malloc(sizeof(pdp8_instr));
 
-static char *skip_blankspaces(char *line, int row) {
-  char opr[1024];
-  uint16_t cnt = 0;
-
-  for (char *ptr = line; *ptr; ptr++) {
-    if (*ptr == '/') {
+  for (int i = 0; i < 7; i++) {
+    if (head->type == mri[i]) {
+      instr->OPR = mri[i];
       break;
     }
-    if (is_important(*ptr)) {
-      opr[cnt++] = *ptr;
-    }
   }
-
-  char *op = malloc(sizeof(char) * (cnt + 1));
-  opr[cnt] = '\0';
-  return op;
+  if (!head->next) {
+    printf("Expected a memory address %zu:%zu\n", head->row, head->col);
+    return;
+  }
+  head = head->next;
+  if (head->type) {
+    printf("Expected an identifier, found %d\n", head->type);
+    return;
+  }
+  head = head->next;
+  // if ()
 }
+void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
+  Token *head;
+  Token *tail;
 
-void pdp8_tokenize(pdp8_emul *emulator, const char *filename) {
-  FILE *fd = fopen(filename, "r");
+  int len = 0;
 
-  printf("%s\n", filename);
+  Token *dummy = lx->head;
 
-  char line[1024];
-  int row = 0;
-  while (fgets(line, sizeof(line), fd)) {
-    // printf("%s", line);
-    skip_blankspaces(line, row);
-    row++;
+  for (; dummy; dummy = dummy->next) {
+    if (dummy->type == NEW_LINE) {
+      // printf("End line %s\n", dummy->val);
+      token_to_operation(emul, head, len);
+      len = 0;
+      head = NULL;
+      tail = NULL;
+      continue;
+    }
+    if (!head)
+      head = dummy;
+    if (!tail)
+      tail = dummy;
+    else {
+      tail->next = dummy;
+      tail = tail->next;
+    }
+    len++;
   }
 }

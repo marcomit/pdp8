@@ -4,8 +4,8 @@
 #include <stddef.h>
 typedef enum TokenType {
   // Memory Reference Instructions   (MRI)
-  AND, // And logico
-  ADD, // Aggiunge l'indirizzo di memoria ad AC
+  AND,
+  ADD,
   LDA,
   STA,
   BUN,
@@ -26,7 +26,24 @@ typedef enum TokenType {
   SZE,
   HLT,
 
+  // Input/Output Instructions
+  INP,
+  OUT,
+  SKI,
+  SKO,
+  ION,
+  IOF,
+
+  // Pseudo instructions
+  ORG,
+  END,
+  DEC,
+  HEX,
+
+  // Other tokens
+  I,
   COMMA,
+  NEW_LINE,
   IDENTIFIER
 } TokenType;
 

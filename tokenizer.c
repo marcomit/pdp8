@@ -16,15 +16,20 @@ static Token *newtoken(char *word, int row, int col) {
   token->val = malloc(sizeof(word));
   strcpy(token->val, word);
 
-  char *types[20] = {"ADD", "AND", "LDA", "STA", "BUN",   "ISZ",       "CLA",
-                     "CLE", "CMA", "CME", "CIR", "CIL",   "INC",       "SPA",
-                     "SNA", "SZA", "SZE", "HLT", "COMMA", "IDENTIFIER"};
+  char *types[32] = {"AND", "ADD", "LDA", "STA", "BUN", "BSA", "ISZ", "CLA",
+                     "CLE", "CMA", "CME", "CIR", "CIL", "INC", "SPA", "SNA",
+                     "SZA", "SZE", "HLT", "INP", "OUT", "SKI", "SKO", "ION",
+                     "IOF", "ORG", "END", "DEC", "HEX", "I",   ",",   "\n"};
 
-  for (int i = 0; i < 20; i++) {
-    if (strcmp(word, types[i])) {
+  for (int i = 0; i < 32; i++) {
+    if (strcmp(word, types[i]) == 0) {
+      // printf("Entrato |%s| -> |%s|\n", word, types[i]);
       token->type = (TokenType)i;
       break;
     }
+  }
+  if (!token->type) {
+    token->type = IDENTIFIER;
   }
 
   return token;
@@ -87,7 +92,7 @@ static void read_file(const char *filename) {
 
 static void print_tokens(Lexer *lx) {
   for (Token *curr = lx->head; curr; curr = curr->next) {
-    printf("(%zu, %zu) %s\n", curr->row, curr->col, curr->val);
+    printf("(%zu, %zu) %d %s\n", curr->row, curr->col, curr->type, curr->val);
   }
 }
 
