@@ -24,7 +24,10 @@ typedef enum TokenType {
   SNA,
   SZA,
   SZE,
-  HLT
+  HLT,
+
+  COMMA,
+  IDENTIFIER
 } TokenType;
 
 typedef struct Token {
@@ -32,10 +35,12 @@ typedef struct Token {
   size_t col;
   size_t row;
   char *val;
+  struct Token *next;
 } Token;
 
 typedef struct Lexer {
-  Token *token;
+  Token *head;
+  Token *tail;
   size_t len;
 } Lexer;
 
