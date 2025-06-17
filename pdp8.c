@@ -52,30 +52,7 @@ static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
   // if ()
 }
 void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
-  Token *head;
-  Token *tail;
-
-  int len = 0;
-
-  Token *dummy = lx->head;
-
-  for (; dummy; dummy = dummy->next) {
-    if (dummy->type == NEW_LINE) {
-      // printf("End line %s\n", dummy->val);
-      token_to_operation(emul, head, len);
-      len = 0;
-      head = NULL;
-      tail = NULL;
-      continue;
-    }
-    if (!head)
-      head = dummy;
-    if (!tail)
-      tail = dummy;
-    else {
-      tail->next = dummy;
-      tail = tail->next;
-    }
-    len++;
+  for (Token *c = lx->head; c; c = c->next) {
+    printf("TK: %s\n", c->val);
   }
 }

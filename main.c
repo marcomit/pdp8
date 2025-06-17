@@ -12,18 +12,19 @@ static void usage() {
 }
 
 static void compile(int argc, const char **argv) {
-  if (argc < 4)
+  if (argc < 4) {
+    printf("Output file is missing.\n");
     return;
+  }
   const char *filename = argv[2];
 
   const char *target = argv[3];
 
-  printf("Source: %s", filename);
-  printf("Target: %s", target);
+  printf("Source: %s\n", filename);
+  printf("Target: %s\n", target);
 
   pdp8_emul *emulator = pdp8_emul_new();
 
-  printf("Tokenize\n");
   Lexer *lx = tokenize(filename);
 
   printf("Convert to oprs");
@@ -37,8 +38,6 @@ int main(int argc, const char **argv) {
     usage();
     return 1;
   }
-
-  const char *filename = argv[2];
 
   if (strcmp(argv[1], "compile") == 0) {
     compile(argc, argv);

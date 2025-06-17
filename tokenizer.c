@@ -28,7 +28,7 @@ static Token *newtoken(char *word, int row, int col) {
     }
   }
   if (!token->type) {
-    token->type = IDENTIFIER;
+    token->type = LABEL;
   }
 
   return token;
@@ -42,7 +42,7 @@ static void add_token(Lexer *lexer, Token *token) {
     lexer->tail = token;
   } else {
     lexer->tail->next = token;
-    lexer->tail = lexer->tail->next;
+    lexer->tail = token;
   }
 }
 
@@ -90,7 +90,7 @@ static void read_file(const char *filename) {
 }
 
 Lexer *tokenize(const char *filename) {
-  read_file(filename);
+  // read_file(filename);
   FILE *fd = fopen(filename, "r");
   Lexer *lexer = malloc(sizeof(Lexer));
   char line[1024];
@@ -98,9 +98,7 @@ Lexer *tokenize(const char *filename) {
   while (fgets(line, 1024, fd)) {
     if (line[0] == '\0')
       continue;
-    printf("Parse row |%s|\n", line);
     parse_row(lexer, line, row++);
   }
-
   return lexer;
 }

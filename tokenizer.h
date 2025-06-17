@@ -44,7 +44,7 @@ typedef enum TokenType {
   I,
   COMMA,
   NEW_LINE,
-  IDENTIFIER
+  LABEL
 } TokenType;
 
 typedef struct Token {
