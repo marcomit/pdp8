@@ -23,7 +23,6 @@ static Token *newtoken(char *word, int row, int col) {
 
   for (int i = 0; i < 32; i++) {
     if (strcmp(word, types[i]) == 0) {
-      // printf("Entrato |%s| -> |%s|\n", word, types[i]);
       token->type = (TokenType)i;
       break;
     }
@@ -41,15 +40,15 @@ static void add_token(Lexer *lexer, Token *token) {
   }
   if (!lexer->tail) {
     lexer->tail = token;
+  } else {
+    lexer->tail->next = token;
+    lexer->tail = lexer->tail->next;
   }
-  lexer->tail->next = token;
-  lexer->tail = lexer->tail->next;
 }
 
 static void parse_token(Lexer *lexer, char *word, int row, int col) {
   Token *tk = newtoken(word, row, col);
   add_token(lexer, tk);
-  // ciao
 }
 
 /*
@@ -78,22 +77,16 @@ static void parse_row(Lexer *lexer, char *line, int row) {
     c[j++] = line[i];
   }
   parse_token(lexer, "\n", row, 0);
-  // printf("----\n");
 }
 
 static void read_file(const char *filename) {
   FILE *fd = fopen(filename, "r");
   char line[1024];
-  while (fgets(line, sizeof(line), fd)) {
+
+  while (fgets(line, 1024, fd)) {
     printf("%s", line);
   }
-  printf("---------------\n\n");
-}
-
-static void print_tokens(Lexer *lx) {
-  for (Token *curr = lx->head; curr; curr = curr->next) {
-    printf("(%zu, %zu) %d %s\n", curr->row, curr->col, curr->type, curr->val);
-  }
+  fclose(fd);
 }
 
 Lexer *tokenize(const char *filename) {
@@ -105,9 +98,9 @@ Lexer *tokenize(const char *filename) {
   while (fgets(line, 1024, fd)) {
     if (line[0] == '\0')
       continue;
+    printf("Parse row |%s|\n", line);
     parse_row(lexer, line, row++);
   }
 
-  print_tokens(lexer);
   return lexer;
 }
