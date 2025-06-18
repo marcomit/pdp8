@@ -27,7 +27,7 @@ static void compile(int argc, const char **argv) {
 
   Lexer *lx = tokenize(filename);
 
-  printf("Convert to oprs");
+  printf("Convert to oprs\n");
   pdp8_get_oprs(emulator, lx);
 }
 

@@ -30,29 +30,35 @@ static void add_opr(pdp8_emul *emul, pdp8_instr *instruction) {
 }
 
 static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
-  TokenType mri[] = {AND, ADD, LDA, STA, BUN, BSA, ISZ};
-  pdp8_instr *instr = malloc(sizeof(pdp8_instr));
-
-  for (int i = 0; i < 7; i++) {
-    if (head->type == mri[i]) {
-      instr->OPR = mri[i];
-      break;
-    }
-  }
-  if (!head->next) {
-    printf("Expected a memory address %zu:%zu\n", head->row, head->col);
+  if (len == 1) {
     return;
   }
-  head = head->next;
-  if (head->type) {
-    printf("Expected an identifier, found %d\n", head->type);
-    return;
-  }
-  head = head->next;
-  // if ()
 }
+
 void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
+  int len = 0;
+
+  Token *head;
+  Token *tail;
+
   for (Token *c = lx->head; c; c = c->next) {
-    printf("TK: %s\n", c->val);
+    if (c->type == NEW_LINE) {
+      if (len > 0) {
+        token_to_operation(emul, head, len);
+      }
+      continue;
+    }
+    if (!head) {
+      head = c;
+      len = 1;
+    }
+    if (!tail) {
+      tail = c;
+      len = 1;
+    } else {
+      tail->next = c;
+      tail = c;
+      len++;
+    }
   }
 }
