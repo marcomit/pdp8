@@ -35,7 +35,10 @@ typedef struct pdp8_emul {
   uint16_t MB;
   uint16_t MQ;
 
+  uint16_t TMP;
+
   uint16_t memory[4096];
+
   pdp8_instr *instructions;
   pdp8_instr *tail;
 } pdp8_emul;
