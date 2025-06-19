@@ -35,7 +35,10 @@ typedef struct pdp8_emul {
   uint16_t MB;
   uint16_t MQ;
 
-  uint16_t TMP;
+  /* Location counter
+   * It indicates the current memory position
+   */
+  uint16_t LC;
 
   uint16_t memory[4096];
 

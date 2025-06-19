@@ -20,15 +20,15 @@ void free_pdp8_emul(pdp8_emul *emulator) {
 static void add_opr(pdp8_emul *emul, pdp8_instr *instruction) {
   if (!emul->instructions) {
     emul->instructions = instruction;
-    emul->TMP = 1;
+    emul->LC = 1;
   }
   if (!emul->tail) {
     emul->tail = instruction;
-    emul->TMP = 1;
+    emul->LC = 1;
   } else {
     emul->tail->next = instruction;
     emul->tail = emul->tail->next;
-    emul->TMP++;
+    emul->LC++;
   }
 }
 

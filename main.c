@@ -29,6 +29,7 @@ static void compile(int argc, const char **argv) {
 
   printf("Convert to oprs\n");
   pdp8_get_oprs(emulator, lx);
+  printf("Compiled\n");
 }
 
 static void run(int argc, const char **argv) {}
