@@ -51,9 +51,15 @@ static void parse_token(Lexer *lexer, char *word, int row, int col) {
   add_token(lexer, tk);
 }
 
-/*
- * this function must be parse a row and it can generate an expression
- */
+static void cut_token(Lexer *lexer, int *i, char *line, int row, int col) {
+  if (*i <= 0) {
+    return;
+  }
+  line[*i] = '\0';
+  parse_token(lexer, line, row, col);
+  *i = 0;
+}
+
 static void parse_row(Lexer *lexer, char *line, int row) {
   char c[1024];
   int j = 0;
@@ -61,32 +67,28 @@ static void parse_row(Lexer *lexer, char *line, int row) {
     if (line[i] == '/')
       break;
     if (line[i] == ',') {
+      // if (j > 0) {
+      //   c[j] = '\0';
+      //   parse_token(lexer, c, row, i);
+      // }
+      cut_token(lexer, &j, c, row, i);
       c[j] = '\0';
       parse_token(lexer, ",", row, i);
       j = 0;
       continue;
     }
     if (!is_important(line[i])) {
-      if (j > 0) {
-        c[j] = '\0';
-        parse_token(lexer, c, row, i);
-        j = 0;
-      }
+      // if (j > 0) {
+      //   c[j] = '\0';
+      //   parse_token(lexer, c, row, i);
+      //   j = 0;
+      // }
+      cut_token(lexer, &j, c, row, i);
       continue;
     }
     c[j++] = line[i];
   }
   parse_token(lexer, "\n", row, 0);
-}
-
-static void read_file(const char *filename) {
-  FILE *fd = fopen(filename, "r");
-  char line[1024];
-
-  while (fgets(line, 1024, fd)) {
-    printf("%s", line);
-  }
-  fclose(fd);
 }
 
 Lexer *tokenize(const char *filename) {
