@@ -4,6 +4,13 @@
 #include "tokenizer.h"
 #include <stdint.h>
 
+#define LOCATION_SIZE 0x1000
+
+typedef struct pdp8_label_registry {
+  char *name;
+  uint16_t location;
+  struct pdp8_label_registry *next;
+} pdp8_label_registry;
 /*
  * pdp8_instr is a struct for an instruction of PDP8.
  * In PDP8 the instruction has 16 bit.
@@ -13,6 +20,7 @@
  * memory
  */
 typedef struct pdp8_instr {
+  uint16_t location;
   uint8_t I;
   uint8_t OPR;
   uint16_t ADDRESS;
@@ -31,8 +39,8 @@ typedef struct pdp8_emul {
   uint16_t AC;
   uint16_t PC;
   uint16_t IR;
-  uint16_t MA;
-  uint16_t MB;
+  uint16_t MAR;
+  uint16_t MBR;
   uint16_t MQ;
 
   /* Location counter
@@ -40,10 +48,12 @@ typedef struct pdp8_emul {
    */
   uint16_t LC;
 
-  uint16_t memory[4096];
+  uint16_t memory[LOCATION_SIZE];
 
   pdp8_instr *instructions;
   pdp8_instr *tail;
+
+  pdp8_label_registry *registry;
 } pdp8_emul;
 
 pdp8_emul *pdp8_emul_new();

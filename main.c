@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "std.h"
+
 static void usage() {
   printf("Usage:\n");
   printf("compile [filename]\n");

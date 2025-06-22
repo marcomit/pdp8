@@ -1,14 +1,27 @@
 #include "pdp8.h"
 #include "tokenizer.h"
 #include <ctype.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#define ADVANCE(x) (x) = (x)->next
+
+static TokenType mri[] = {
+    AND, ADD, LDA, STA, BUN, BSA, ISZ,
+};
+static TokenType rri[] = {
+    CLA, CLE, CMA, CME, CIR, CIL, INC, SPA, SNA, SZA, SZE, HLT,
+};
+static TokenType pseudo[] = {ORG, END, DEC, HEX, I, COMMA, NEW_LINE, LABEL};
+static TokenType io[] = {INP, OUT, SKI, SKO, ION, IOF};
+
 pdp8_emul *pdp8_emul_new() {
   pdp8_emul *emulator = malloc(sizeof(pdp8_emul));
+  emulator->LC = 0;
   return emulator;
 }
 
@@ -17,83 +30,294 @@ void free_pdp8_emul(pdp8_emul *emulator) {
   free(emulator);
 }
 
-static void add_opr(pdp8_emul *emul, pdp8_instr *instruction) {
-  if (!emul->instructions) {
-    emul->instructions = instruction;
-    emul->LC = 1;
+static bool hexstr_tohex(char *hex, size_t *res) {
+  char *endptr = NULL;
+  errno = 0;
+  size_t value = strtol(hex, &endptr, 16);
+
+  if (errno == ERANGE) {
+    printf("Error: value out of range\n");
+    return false;
+  } else if (endptr == hex) {
+    printf("Error: no digits were found\n");
+    return false;
+  } else if (*endptr != '\0') {
+    printf("Error: extra characters after number: %s\n", endptr);
+    return false;
   }
-  if (!emul->tail) {
-    emul->tail = instruction;
-    emul->LC = 1;
-  } else {
-    emul->tail->next = instruction;
-    emul->tail = emul->tail->next;
-    emul->LC++;
+  *res = value;
+  return true;
+}
+
+static void parse_operation(uint16_t val, pdp8_instr *instr) {
+  instr->ADDRESS = (val << 4) >> 4;
+  instr->I = val >> 15;
+  instr->OPR = (val << 1) >> 13;
+}
+
+static uint16_t from_instruction_to_bit(pdp8_instr *instr) {
+  uint16_t res = 0;
+  res = instr->I << 15;
+  res += instr->OPR << 12;
+  res += instr->ADDRESS;
+  return res;
+}
+
+static void print_instructions(pdp8_instr *head) {
+  pdp8_instr *c = head;
+  uint16_t val;
+  for (; c; ADVANCE(c)) {
+    printf("%d ", c->location);
+    val = from_instruction_to_bit(c);
+    // while (val) {
+    //   printf("%d", val & 1);
+    //   val >>= 1;
+    // }
+    printf("%d", val);
+    printf("\n");
   }
 }
 
-static bool pdp8_check_toekn_type(TokenType *instructions, TokenType tt) {
-  for (; instructions; (*instructions)++) {
-    if (*instructions == tt)
+static void pdp8_register_label(pdp8_emul *emul, char *label) {
+  printf("Registering label %s\n", label);
+  pdp8_label_registry *entry = malloc(sizeof(pdp8_label_registry));
+
+  entry->name = label;
+  entry->location = emul->LC;
+  if (!emul->registry) {
+    emul->registry = entry;
+    return;
+  }
+  pdp8_label_registry *head = emul->registry;
+  while (head->next)
+    ADVANCE(head);
+  head->next = entry;
+}
+static uint16_t pdp8_get_label(pdp8_emul *emul, char *label) {
+  pdp8_label_registry *h = emul->registry;
+  for (; h; ADVANCE(h)) {
+    if (strcmp(h->name, label) == 0) {
+      return h->location;
+    }
+  }
+  return -1;
+}
+
+static void print_opr(pdp8_instr *instr) {
+  printf("%d===\n", instr->location);
+  printf("I:       %d\n", instr->I);
+  printf("OPR:     %d\n", instr->OPR);
+  printf("ADDRESS: %d\n", instr->ADDRESS);
+  printf("===\n");
+}
+
+static void add_opr(pdp8_emul *emul, pdp8_instr *instruction) {
+  print_opr(instruction);
+  if (!emul->instructions) {
+    emul->instructions = instruction;
+  }
+  if (!emul->tail) {
+    emul->tail = instruction;
+  } else {
+    emul->tail->next = instruction;
+    ADVANCE(emul->tail);
+  }
+  emul->LC++;
+}
+
+static bool pdp8_check_token_type(TokenType *instructions, TokenType tt,
+                                  int len) {
+  for (int i = 0; i < len; i++) {
+    if (instructions[i] == tt)
       return true;
   }
   return false;
 }
 
-static bool is_mri_operation(Token *tk) {
-  TokenType mri[] = {AND, ADD, LDA, STA, BUN, BSA, ISZ};
-  return pdp8_check_toekn_type(mri, tk->type);
+static bool expected(Token *t, TokenType *permitted, int len) {
+  bool res = pdp8_check_token_type(permitted, t->type, len);
+  if (!res) {
+    printf("Unexpected token %s at %zu:%zu\n", t->val, t->row, t->col);
+    exit(1);
+  }
+  return res;
 }
 
-static bool is_rri_operation(Token *tk) {
-  TokenType rri[] = {
-      CLA, CLE, CMA, CME, CIR, CIL, INC, SPA, SNA, SZA, SZE, HLT,
-  };
-  return pdp8_check_toekn_type(rri, tk->type);
-}
-
-static bool is_IO_operation(Token *tk) {
-  TokenType io[] = {INP, OUT, SKI, SKO, ION, IOF};
-  return pdp8_check_toekn_type(io, tk->type);
-}
-
-static bool is_implicit_operation(Token *tk) {
-  TokenType impl[] = {ORG, END, DEC, HEX, I, COMMA, NEW_LINE, LABEL};
-  return pdp8_check_toekn_type(impl, tk->type);
-}
-
-static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
+static pdp8_instr *pdp8_new_instr(pdp8_emul *emul) {
   pdp8_instr *instr = malloc(sizeof(pdp8_instr));
+  instr->location = emul->LC;
+  instr->ADDRESS = 0;
+  instr->OPR = 0;
+  instr->I = 0;
+  return instr;
 }
 
-static void parse_mri_instruction(pdp8_emul *emul, Token *line, int len) {}
+static void pdp8_free_instr(pdp8_instr *instr) {}
+
+static void parse_mri_instruction(pdp8_emul *emul, Token *line, int len) {
+  if (len < 2) {
+    printf("Invalid usage of Memory Referenced Instructions\n");
+    printf("Error at %zu:%zu\n", line->row, line->row);
+    exit(1);
+  }
+  pdp8_instr *instr = pdp8_new_instr(emul);
+  instr->OPR = line->type % 8;
+  ADVANCE(line);
+  TokenType permitted[] = {LABEL};
+  if (!expected(line, permitted, 1)) {
+    goto clear;
+  }
+
+  // The first pass it try to get the label. If it is not found it must be set
+  // in the second pass
+  instr->ADDRESS = pdp8_get_label(emul, line->val);
+
+  ADVANCE(line);
+
+  if (len > 2) {
+    permitted[0] = I;
+    if (!expected(line, permitted, 1)) {
+      goto clear;
+    }
+    instr->I = 1;
+  }
+  goto add;
+clear:
+  pdp8_free_instr(instr);
+  goto end;
+add:
+  add_opr(emul, instr);
+end:
+  return;
+}
 
 static void parse_rri_operation(pdp8_emul *emul, Token *line, int len) {
   if (len > 1) {
     printf("Invalid usage of Register Referenced Instructions\n");
+    printf("Unexpected token %s\n", line->next->val);
     printf("Error at %zu:%zu\n", line->row, line->col);
+    exit(1);
+  }
+
+  pdp8_instr *instr = pdp8_new_instr(emul);
+  instr->I = 0;
+  instr->OPR = 7;
+  // 0111 0000 0000 0001
+  instr->ADDRESS = 0x800;
+  TokenType *loc_rri = rri;
+  for (; loc_rri; (*loc_rri)++) {
+    if (*loc_rri == line->type) {
+      break;
+    }
+    instr->ADDRESS >>= 1;
+  }
+  add_opr(emul, instr);
+}
+
+static void parse_io_operation(pdp8_emul *emul, Token *line, int len) {
+  printf("I/O Operation not implemented\n");
+}
+
+static void parse_pseudo_operation(pdp8_emul *emul, Token *line, int len) {
+  if (!line)
     return;
+  pdp8_instr *instr = pdp8_new_instr(emul);
+  size_t val = 0;
+  switch (line->type) {
+  case ORG:
+    if (!line->next) {
+      printf("Missing memory target %zu:%zu\n", line->row, line->col);
+      exit(1);
+    }
+    if (!hexstr_tohex(line->next->val, &val)) {
+      printf("Invalid memory target %zu:%zu\n", line->row, line->col);
+      exit(1);
+    }
+    printf("Address from the org %zu\n", val);
+    emul->LC = val;
+    break;
+  case END:
+    printf("Converted\n");
+    exit(1);
+    break;
+  case DEC:
+    val = atoi(line->next->val);
+    parse_operation(val, instr);
+    add_opr(emul, instr);
+    break;
+  case HEX:
+    val = hexstr_tohex(line->next->val, &val);
+    parse_operation(val, instr);
+    add_opr(emul, instr);
+    break;
+  case LABEL:
+    if (len < 3) {
+      printf("Missing argument of label at %zu:%zu\n", line->row, line->col);
+      exit(1);
+    }
+    char *label = line->val;
+    ADVANCE(line);
+    TokenType permitted[] = {COMMA, HEX};
+    if (!expected(line, permitted, 1)) {
+      exit(1);
+    }
+    ADVANCE(line);
+    permitted[0] = DEC;
+    if (!expected(line, permitted, 2)) {
+      exit(1);
+    }
+    pdp8_register_label(emul, label);
+    break;
+  default:
+    printf("Pseudo operation %s not implemented\n", line->val);
+    break;
   }
 }
 
-static void parse_io_operation(pdp8_emul *emul, Token *line, int len) {}
-
-static void parse_label_operation(pdp8_emul *emul, Token *line, int len) {}
-
 static void pdp8_print_tokens(Lexer *lx) {
-  // for (Token *c = lx->head; c; c = c->next) {
-  //   printf();
-  // }
+  for (Token *c = lx->head; c; c = c->next) {
+    printf("%s", c->val);
+  }
+}
+
+static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
+  if (head == NULL) {
+    printf("Parsing error!\n");
+    exit(1);
+  }
+  TokenType *tokens[] = {mri, rri, pseudo, io};
+  int lens[] = {7, 12, 8, 6};
+
+  void (*parse[])(pdp8_emul *, Token *,
+                  int) = {parse_mri_instruction, parse_rri_operation,
+                          parse_pseudo_operation, parse_io_operation};
+
+  for (int i = 0; i < 4; i++) {
+    if (pdp8_check_token_type(tokens[i], head->type, lens[i])) {
+      printf("Operation: %s parsed as %d,  len %d\n", head->val, i, len);
+      parse[i](emul, head, len);
+      break;
+    }
+  }
+}
+
+static void print_registry(pdp8_emul *emul) {
+  for (pdp8_label_registry *r = emul->registry; r; ADVANCE(r)) {
+    printf("%d -> %s\n", r->location, r->name);
+  }
 }
 
 void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
-  Token *head;
-  Token *tail;
+  Token *head = NULL;
+  Token *tail = NULL;
   int len = 0;
+
+  pdp8_print_tokens(lx);
 
   for (Token *c = lx->head; c; c = c->next) {
     if (c->type == NEW_LINE) {
-      token_to_operation(emul, head, len);
+      if (len > 0 && head)
+        token_to_operation(emul, head, len);
       head = NULL;
       tail = NULL;
       continue;
@@ -111,4 +335,44 @@ void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
       len++;
     }
   }
+  printf("\n\n\n\n");
+  print_instructions(emul->instructions);
+
+  print_registry(emul);
+}
+
+void pdp8_fetch(pdp8_emul *emul) {
+  emul->MAR = emul->PC;
+  emul->MBR = emul->memory[emul->PC];
+  emul->PC++;
+  uint8_t i = emul->MBR >> 15 & 1;
+  uint8_t opr = emul->MBR << 1;
+  opr = opr >> 12;
+  if (i && opr != 7) {
+    // I
+    emul->R = 1;
+  } else {
+    emul->F = 1;
+  }
+}
+
+void pdp8_iaddressing(pdp8_emul *emul) {
+  emul->MAR = emul->MBR << 4;
+  emul->MAR >>= 4;
+  emul->MBR = emul->memory[emul->PC];
+
+  emul->F = 1;
+  emul->R = 0;
+}
+
+void pdp8_execute(pdp8_emul *emul) {}
+
+void pdp8_interrupt(pdp8_emul *emul) {}
+
+void cycle(pdp8_emul *emul) {
+  // 2 bit
+  uint8_t decoder = ((emul->F & 1) << 1) + (emul->R & 1);
+  void (*decodes[])(pdp8_emul *) = {pdp8_fetch, pdp8_iaddressing, pdp8_execute,
+                                    pdp8_interrupt};
+  decodes[decoder](emul);
 }
