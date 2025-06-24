@@ -30,6 +30,13 @@ void free_pdp8_emul(pdp8_emul *emulator) {
   free(emulator);
 }
 
+static void printbit(size_t num, uint8_t len) {
+  for (uint8_t i = 0; i < len; i++) {
+    printf("%zu", num & 1);
+    num >>= 1;
+  }
+}
+
 static bool hexstr_tohex(char *hex, size_t *res) {
   char *endptr = NULL;
   errno = 0;
@@ -78,21 +85,6 @@ static void print_instructions(pdp8_instr *head) {
   }
 }
 
-static void pdp8_register_label(pdp8_emul *emul, char *label) {
-  printf("Registering label %s\n", label);
-  pdp8_label_registry *entry = malloc(sizeof(pdp8_label_registry));
-
-  entry->name = label;
-  entry->location = emul->LC;
-  if (!emul->registry) {
-    emul->registry = entry;
-    return;
-  }
-  pdp8_label_registry *head = emul->registry;
-  while (head->next)
-    ADVANCE(head);
-  head->next = entry;
-}
 static uint16_t pdp8_get_label(pdp8_emul *emul, char *label) {
   pdp8_label_registry *h = emul->registry;
   for (; h; ADVANCE(h)) {
@@ -103,12 +95,39 @@ static uint16_t pdp8_get_label(pdp8_emul *emul, char *label) {
   return -1;
 }
 
+static void pdp8_register_label(pdp8_emul *emul, char *label) {
+  uint16_t index = -1;
+  if (pdp8_get_label(emul, label) == index) {
+  }
+
+  printf("Registering label %s\n", label);
+  pdp8_label_registry *entry = malloc(sizeof(pdp8_label_registry));
+
+  entry->name = label;
+  entry->location = emul->LC;
+  if (!emul->registry) {
+    emul->registry = entry;
+    return;
+  }
+  pdp8_label_registry *head = emul->registry;
+  while (head->next) {
+    ADVANCE(head);
+  }
+  head->next = entry;
+}
+
 static void print_opr(pdp8_instr *instr) {
-  printf("%d===\n", instr->location);
-  printf("I:       %d\n", instr->I);
-  printf("OPR:     %d\n", instr->OPR);
-  printf("ADDRESS: %d\n", instr->ADDRESS);
-  printf("===\n");
+
+  printf("%d: ", instr->location);
+  printbit(instr->I, 1);
+  printbit(instr->OPR, 3);
+  printbit(instr->ADDRESS, 12);
+  printf("\n");
+  // printf("%d===\n", instr->location);
+  // printf("I:       %d\n", instr->I);
+  // printf("OPR:     %d\n", instr->OPR);
+  // printf("ADDRESS: %d\n", instr->ADDRESS);
+  // printf("===\n");
 }
 
 static void add_opr(pdp8_emul *emul, pdp8_instr *instruction) {
@@ -202,7 +221,6 @@ static void parse_rri_operation(pdp8_emul *emul, Token *line, int len) {
   pdp8_instr *instr = pdp8_new_instr(emul);
   instr->I = 0;
   instr->OPR = 7;
-  // 0111 0000 0000 0001
   instr->ADDRESS = 0x800;
   TokenType *loc_rri = rri;
   for (; loc_rri; (*loc_rri)++) {
@@ -257,12 +275,12 @@ static void parse_pseudo_operation(pdp8_emul *emul, Token *line, int len) {
     }
     char *label = line->val;
     ADVANCE(line);
-    TokenType permitted[] = {COMMA, HEX};
+    TokenType permitted[] = {COMMA, DEC};
     if (!expected(line, permitted, 1)) {
       exit(1);
     }
     ADVANCE(line);
-    permitted[0] = DEC;
+    permitted[0] = HEX;
     if (!expected(line, permitted, 2)) {
       exit(1);
     }
@@ -307,7 +325,7 @@ static void print_registry(pdp8_emul *emul) {
   }
 }
 
-void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
+static void pdp8_fetch_oprs(pdp8_emul *emul, Lexer *lx) {
   Token *head = NULL;
   Token *tail = NULL;
   int len = 0;
@@ -339,6 +357,23 @@ void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
   print_instructions(emul->instructions);
 
   print_registry(emul);
+}
+
+void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
+  pdp8_fetch_oprs(emul, lx);
+
+  for (pdp8_instr *c = emul->instructions; c; ADVANCE(c)) {
+    pdp8_free_instr(c);
+  }
+
+  printf("Free the instructions\n");
+  pdp8_fetch_oprs(emul, lx);
+  printf("Finished\n\n");
+  pdp8_instr *i = emul->instructions;
+  while (i) {
+    print_opr(emul->instructions);
+    ADVANCE(i);
+  }
 }
 
 void pdp8_fetch(pdp8_emul *emul) {
