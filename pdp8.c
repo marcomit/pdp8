@@ -100,7 +100,7 @@ static void pdp8_register_label(pdp8_emul *emul, char *label) {
   if (pdp8_get_label(emul, label) == index) {
   }
 
-  printf("Registering label %s\n", label);
+  printf("Registering label %s %d\n", label, emul->LC);
   pdp8_label_registry *entry = malloc(sizeof(pdp8_label_registry));
 
   entry->name = label;
@@ -371,7 +371,7 @@ void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
   printf("Finished\n\n");
   pdp8_instr *i = emul->instructions;
   while (i) {
-    print_opr(emul->instructions);
+    print_opr(i);
     ADVANCE(i);
   }
 }

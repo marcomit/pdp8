@@ -67,10 +67,6 @@ static void parse_row(Lexer *lexer, char *line, int row) {
     if (line[i] == '/')
       break;
     if (line[i] == ',') {
-      // if (j > 0) {
-      //   c[j] = '\0';
-      //   parse_token(lexer, c, row, i);
-      // }
       cut_token(lexer, &j, c, row, i);
       c[j] = '\0';
       parse_token(lexer, ",", row, i);
@@ -78,11 +74,6 @@ static void parse_row(Lexer *lexer, char *line, int row) {
       continue;
     }
     if (!is_important(line[i])) {
-      // if (j > 0) {
-      //   c[j] = '\0';
-      //   parse_token(lexer, c, row, i);
-      //   j = 0;
-      // }
       cut_token(lexer, &j, c, row, i);
       continue;
     }
