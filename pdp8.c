@@ -30,11 +30,42 @@ void free_pdp8_emul(pdp8_emul *emulator) {
   free(emulator);
 }
 
-static void printbit(size_t num, uint8_t len) {
-  for (uint8_t i = 0; i < len; i++) {
-    printf("%zu", num & 1);
+static void bitf(size_t num, int len) {
+  uint8_t bits[len];
+  for (int i = 0; i < len; i++) {
+    // printf("%zu", num & 1);
+    bits[len - 1 - i] = num & 1;
     num >>= 1;
   }
+  for (int i = 0; i < len; i++) {
+    printf("%d", bits[i]);
+  }
+}
+
+// It takes an 8 bit number but it convert only the 4 bits
+static char bits_to_hex(uint8_t num) {
+  num %= 16;
+  char base = num < 10 ? '0' : 'A' - 10;
+  return base + num;
+}
+
+static char *instr_to_hex(pdp8_instr *instr) {
+  char *res = malloc(sizeof(char) * 7);
+  // The idea is to take 4 bit and convert it to a single character
+  // So now i want to decode an operation like this:
+  // 3 hex char for location memory
+  // 1 hex char for (I + OPR)
+  // 3 hex char for ADDRESS of the operation
+  for (int i = 0; i < 3; i++) {
+    res[i] = bits_to_hex(instr->location >> ((2 - i) * 4));
+  }
+
+  uint8_t tmp = (instr->I << 3) + instr->OPR;
+  res[3] = bits_to_hex(tmp);
+  for (int i = 0; i < 3; i++) {
+    res[4 + i] = bits_to_hex(instr->ADDRESS >> ((2 - i) * 4));
+  }
+  return res;
 }
 
 static bool hexstr_tohex(char *hex, size_t *res) {
@@ -57,7 +88,7 @@ static bool hexstr_tohex(char *hex, size_t *res) {
 }
 
 static void parse_operation(uint16_t val, pdp8_instr *instr) {
-  instr->ADDRESS = (val << 4) >> 4;
+  instr->ADDRESS = val % 0x1000;
   instr->I = val >> 15;
   instr->OPR = (val << 1) >> 13;
 }
@@ -100,7 +131,6 @@ static void pdp8_register_label(pdp8_emul *emul, char *label) {
   if (pdp8_get_label(emul, label) == index) {
   }
 
-  printf("Registering label %s %d\n", label, emul->LC);
   pdp8_label_registry *entry = malloc(sizeof(pdp8_label_registry));
 
   entry->name = label;
@@ -118,16 +148,11 @@ static void pdp8_register_label(pdp8_emul *emul, char *label) {
 
 static void print_opr(pdp8_instr *instr) {
 
-  printf("%d: ", instr->location);
-  printbit(instr->I, 1);
-  printbit(instr->OPR, 3);
-  printbit(instr->ADDRESS, 12);
+  printf("%d ", instr->location);
+  bitf(instr->I, 1);
+  bitf(instr->OPR, 3);
+  bitf(instr->ADDRESS, 12);
   printf("\n");
-  // printf("%d===\n", instr->location);
-  // printf("I:       %d\n", instr->I);
-  // printf("OPR:     %d\n", instr->OPR);
-  // printf("ADDRESS: %d\n", instr->ADDRESS);
-  // printf("===\n");
 }
 
 static void add_opr(pdp8_emul *emul, pdp8_instr *instruction) {
@@ -171,7 +196,12 @@ static pdp8_instr *pdp8_new_instr(pdp8_emul *emul) {
   return instr;
 }
 
-static void pdp8_free_instr(pdp8_instr *instr) {}
+static void pdp8_free_instr(pdp8_instr *instr) {
+  if (!instr)
+    return;
+  free(instr);
+  pdp8_free_instr(instr->next);
+}
 
 static void parse_mri_instruction(pdp8_emul *emul, Token *line, int len) {
   if (len < 2) {
@@ -251,28 +281,17 @@ static void parse_pseudo_operation(pdp8_emul *emul, Token *line, int len) {
       printf("Invalid memory target %zu:%zu\n", line->row, line->col);
       exit(1);
     }
-    printf("Address from the org %zu\n", val);
     emul->LC = val;
     break;
   case END:
-    printf("Converted\n");
     exit(1);
-    break;
-  case DEC:
-    val = atoi(line->next->val);
-    parse_operation(val, instr);
-    add_opr(emul, instr);
-    break;
-  case HEX:
-    val = hexstr_tohex(line->next->val, &val);
-    parse_operation(val, instr);
-    add_opr(emul, instr);
     break;
   case LABEL:
     if (len < 3) {
       printf("Missing argument of label at %zu:%zu\n", line->row, line->col);
       exit(1);
     }
+    printf("Label detected %s\n", line->val);
     char *label = line->val;
     ADVANCE(line);
     TokenType permitted[] = {COMMA, DEC};
@@ -285,6 +304,20 @@ static void parse_pseudo_operation(pdp8_emul *emul, Token *line, int len) {
       exit(1);
     }
     pdp8_register_label(emul, label);
+    ADVANCE(line);
+    val = 0;
+    if (line->type == DEC) {
+      val = atoi(line->val);
+    } else {
+      bool res = hexstr_tohex(line->val, &val);
+      if (!res) {
+        printf("Error trying to convert the hex number at %zu:%zu\n", line->row,
+               line->col);
+        exit(1);
+      }
+    }
+    parse_operation(val, instr);
+    add_opr(emul, instr);
     break;
   default:
     printf("Pseudo operation %s not implemented\n", line->val);
@@ -310,9 +343,12 @@ static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
                   int) = {parse_mri_instruction, parse_rri_operation,
                           parse_pseudo_operation, parse_io_operation};
 
+  char *labels[] = {"MRI", "RRI", "PSEUDO", "IO"};
+
   for (int i = 0; i < 4; i++) {
     if (pdp8_check_token_type(tokens[i], head->type, lens[i])) {
-      printf("Operation: %s parsed as %d,  len %d\n", head->val, i, len);
+      printf("Decoded: %s | %s\n", labels[i], head->val);
+      getchar();
       parse[i](emul, head, len);
       break;
     }
@@ -330,7 +366,7 @@ static void pdp8_fetch_oprs(pdp8_emul *emul, Lexer *lx) {
   Token *tail = NULL;
   int len = 0;
 
-  pdp8_print_tokens(lx);
+  // pdp8_print_tokens(lx);
 
   for (Token *c = lx->head; c; c = c->next) {
     if (c->type == NEW_LINE) {
@@ -360,6 +396,7 @@ static void pdp8_fetch_oprs(pdp8_emul *emul, Lexer *lx) {
 }
 
 void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
+  pdp8_print_tokens(lx);
   pdp8_fetch_oprs(emul, lx);
 
   for (pdp8_instr *c = emul->instructions; c; ADVANCE(c)) {
@@ -374,6 +411,21 @@ void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
     print_opr(i);
     ADVANCE(i);
   }
+}
+
+void pdp8_save_binary(pdp8_emul *emul, const char *filename) {
+  FILE *fd = fopen(filename, "w");
+  if (!fd) {
+    printf("Error writing output file");
+    exit(1);
+  }
+  pdp8_instr *i = emul->instructions;
+  while (i) {
+    char *opr = instr_to_hex(i);
+    fprintf(fd, "%s\n", opr);
+    ADVANCE(i);
+  }
+  fclose(fd);
 }
 
 void pdp8_fetch(pdp8_emul *emul) {
