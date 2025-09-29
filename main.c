@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "std.h"
 
 static void usage() {
   printf("Usage:\n");
@@ -36,7 +35,17 @@ static void compile(int argc, const char **argv) {
   pdp8_save_binary(emulator, target);
 }
 
-static void run(int argc, const char **argv) {}
+static void run(int argc, const char **argv) {
+  if (argc < 3) {
+    printf("Missing binary file\n");
+    return;
+  }
+
+  const char *filename = argv[2];
+
+  pdp8_emul *emulator = pdp8_emul_new();
+  pdp8_read_from_binary(emulator, filename);
+}
 
 static void bitf(size_t num, int len) {
   uint8_t bits[len];

@@ -61,5 +61,6 @@ void free_pdp8_emul(pdp8_emul *);
 void pdp8_tokenize(pdp8_emul *, const char *);
 void pdp8_get_oprs(pdp8_emul *, Lexer *);
 void pdp8_save_binary(pdp8_emul *, const char *);
+void pdp8_read_from_binary(pdp8_emul *, const char *);
 
 #endif // !PDP8_H

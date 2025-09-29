@@ -9,7 +9,7 @@ BUILD_DIR = target
 TARGET = $(BUILD_DIR)/pdp8
 
 # Source files
-SRCS = main.c pdp8.c tokenizer.c std.c
+SRCS = main.c pdp8.c tokenizer.c
 
 # Object files in BUILD_DIR
 OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)

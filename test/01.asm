@@ -5,4 +5,4 @@
         HLT             / Halt
 
 VALUE,  DEC 5           / Define constant 5
-RESULT, HEX 0               / Memory location to store result
+RESULT, HEX BFAF               / Memory location to store result

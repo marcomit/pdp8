@@ -83,7 +83,6 @@ static void parse_row(Lexer *lexer, char *line, int row) {
 }
 
 Lexer *tokenize(const char *filename) {
-  // read_file(filename);
   FILE *fd = fopen(filename, "r");
   Lexer *lexer = malloc(sizeof(Lexer));
   char line[1024];
@@ -94,4 +93,18 @@ Lexer *tokenize(const char *filename) {
     parse_row(lexer, line, row++);
   }
   return lexer;
+}
+
+void print_tokens(Lexer *l) {
+  Token *token = l->head;
+
+  if (!token) {
+    printf("Tokens are empty\n");
+    return;
+  }
+
+  while (token) {
+    printf("%d: %s\n", token->type, token->val);
+    token = token->next;
+  }
 }

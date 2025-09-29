@@ -30,6 +30,8 @@ void free_pdp8_emul(pdp8_emul *emulator) {
   free(emulator);
 }
 
+/* It takes a 64bit number and prints its bit.
+ * It starts from the lowest bit to the len bit.*/
 static void bitf(size_t num, int len) {
   uint8_t bits[len];
   for (int i = 0; i < len; i++) {
@@ -42,31 +44,6 @@ static void bitf(size_t num, int len) {
   }
 }
 
-// It takes an 8 bit number but it convert only the 4 bits
-static char bits_to_hex(uint8_t num) {
-  num %= 16;
-  char base = num < 10 ? '0' : 'A' - 10;
-  return base + num;
-}
-
-static char *instr_to_hex(pdp8_instr *instr) {
-  char *res = malloc(sizeof(char) * 7);
-  // The idea is to take 4 bit and convert it to a single character
-  // So now i want to decode an operation like this:
-  // 3 hex char for location memory
-  // 1 hex char for (I + OPR)
-  // 3 hex char for ADDRESS of the operation
-  for (int i = 0; i < 3; i++) {
-    res[i] = bits_to_hex(instr->location >> ((2 - i) * 4));
-  }
-
-  uint8_t tmp = (instr->I << 3) + instr->OPR;
-  res[3] = bits_to_hex(tmp);
-  for (int i = 0; i < 3; i++) {
-    res[4 + i] = bits_to_hex(instr->ADDRESS >> ((2 - i) * 4));
-  }
-  return res;
-}
 
 static bool hexstr_tohex(char *hex, size_t *res) {
   char *endptr = NULL;
@@ -101,6 +78,19 @@ static uint16_t from_instruction_to_bit(pdp8_instr *instr) {
   return res;
 }
 
+static char *instr_to_hex(pdp8_instr *instr) {
+  char *res = malloc(sizeof(char) * 4); 
+
+  res[0] = instr->location >> 8;
+  res[1] = instr->location & 0xFF;
+
+  uint16_t operation = from_instruction_to_bit(instr);
+  res[2] = operation >> 8;
+  res[3] = operation & 0xFF;
+
+  return res;
+}
+
 static void print_instructions(pdp8_instr *head) {
   pdp8_instr *c = head;
   uint16_t val;
@@ -118,6 +108,8 @@ static void print_instructions(pdp8_instr *head) {
 
 static uint16_t pdp8_get_label(pdp8_emul *emul, char *label) {
   pdp8_label_registry *h = emul->registry;
+
+  printf("get_label: %s\n", h ? h->name : "NULL");
   for (; h; ADVANCE(h)) {
     if (strcmp(h->name, label) == 0) {
       return h->location;
@@ -197,10 +189,9 @@ static pdp8_instr *pdp8_new_instr(pdp8_emul *emul) {
 }
 
 static void pdp8_free_instr(pdp8_instr *instr) {
-  if (!instr)
-    return;
+  if (!instr) return;
+  printf("Trying to freed the object %p\n", instr);
   free(instr);
-  pdp8_free_instr(instr->next);
 }
 
 static void parse_mri_instruction(pdp8_emul *emul, Token *line, int len) {
@@ -252,9 +243,8 @@ static void parse_rri_operation(pdp8_emul *emul, Token *line, int len) {
   instr->I = 0;
   instr->OPR = 7;
   instr->ADDRESS = 0x800;
-  TokenType *loc_rri = rri;
-  for (; loc_rri; (*loc_rri)++) {
-    if (*loc_rri == line->type) {
+  for (int i = 0; i < 12; i++) {
+    if (rri[i] == line->type) {
       break;
     }
     instr->ADDRESS >>= 1;
@@ -346,13 +336,16 @@ static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
   char *labels[] = {"MRI", "RRI", "PSEUDO", "IO"};
 
   for (int i = 0; i < 4; i++) {
-    if (pdp8_check_token_type(tokens[i], head->type, lens[i])) {
+    bool checked = pdp8_check_token_type(tokens[i], head->type, lens[i]);
+    printf("type: %d\n", head->type);
+    if (checked) {
       printf("Decoded: %s | %s\n", labels[i], head->val);
       getchar();
       parse[i](emul, head, len);
-      break;
+      return;
     }
   }
+  printf("Token type inexpected: %s %d\n", head->val, head->type);
 }
 
 static void print_registry(pdp8_emul *emul) {
@@ -370,8 +363,10 @@ static void pdp8_fetch_oprs(pdp8_emul *emul, Lexer *lx) {
 
   for (Token *c = lx->head; c; c = c->next) {
     if (c->type == NEW_LINE) {
-      if (len > 0 && head)
+      if (len > 0 && head) { 
+        printf("Token: %s %d\n", head->val, len);
         token_to_operation(emul, head, len);
+      }
       head = NULL;
       tail = NULL;
       continue;
@@ -390,19 +385,30 @@ static void pdp8_fetch_oprs(pdp8_emul *emul, Lexer *lx) {
     }
   }
   printf("\n\n\n\n");
-  print_instructions(emul->instructions);
+  // print_instructions(emul->instructions);
 
-  print_registry(emul);
+  // print_registry(emul);
 }
 
 void pdp8_get_oprs(pdp8_emul *emul, Lexer *lx) {
   pdp8_print_tokens(lx);
+  
+
   pdp8_fetch_oprs(emul, lx);
 
-  for (pdp8_instr *c = emul->instructions; c; ADVANCE(c)) {
-    pdp8_free_instr(c);
-  }
+  printf("First step executed\n");
 
+  // pdp8_free_instr(emul->instructions);
+  
+  emul->instructions = NULL;
+  emul->tail = NULL;
+
+  Token *token = lx->head;
+
+  while (token) {
+    printf("%s", token->val);
+    ADVANCE(token);
+  }
   printf("Free the instructions\n");
   pdp8_fetch_oprs(emul, lx);
   printf("Finished\n\n");
@@ -421,11 +427,30 @@ void pdp8_save_binary(pdp8_emul *emul, const char *filename) {
   }
   pdp8_instr *i = emul->instructions;
   while (i) {
+    print_opr(i);
     char *opr = instr_to_hex(i);
     fprintf(fd, "%s\n", opr);
     ADVANCE(i);
   }
   fclose(fd);
+}
+
+void pdp8_read_from_binary(pdp8_emul *emul, const char *filename) {
+  FILE *fd = fopen(filename, "r");
+
+  if (!fd) {
+    perror("Unable to read file");
+    return;
+  }
+
+  char line[5];
+  while (fgets(line, 5, fd)) {
+    bitf(line[0], 3);
+    bitf(line[1], 3);
+    bitf(line[2], 3);
+    bitf(line[3], 3);
+    bitf(line[4], 3);
+  }
 }
 
 void pdp8_fetch(pdp8_emul *emul) {
