@@ -19,6 +19,8 @@ static TokenType rri[] = {
 static TokenType pseudo[] = {ORG, END, DEC, HEX, I, COMMA, NEW_LINE, LABEL};
 static TokenType io[] = {INP, OUT, SKI, SKO, ION, IOF};
 
+static void token_to_operation(pdp8_emul *emul, Token *head, int len);
+
 pdp8_emul *pdp8_emul_new() {
   pdp8_emul *emulator = malloc(sizeof(pdp8_emul));
   emulator->LC = 0;
@@ -109,7 +111,7 @@ static void print_instructions(pdp8_instr *head) {
 static uint16_t pdp8_get_label(pdp8_emul *emul, char *label) {
   pdp8_label_registry *h = emul->registry;
 
-  printf("get_label: %s\n", h ? h->name : "NULL");
+  printf("get_label(%s): %s\n", label, h ? h->name : "NULL");
   for (; h; ADVANCE(h)) {
     if (strcmp(h->name, label) == 0) {
       return h->location;
@@ -204,6 +206,7 @@ static void parse_mri_instruction(pdp8_emul *emul, Token *line, int len) {
   instr->OPR = line->type % 8;
   ADVANCE(line);
   TokenType permitted[] = {LABEL};
+  printf("Expected label, found %d", line->type);
   if (!expected(line, permitted, 1)) {
     goto clear;
   }
@@ -286,12 +289,14 @@ static void parse_pseudo_operation(pdp8_emul *emul, Token *line, int len) {
     ADVANCE(line);
     TokenType permitted[] = {COMMA, DEC};
     if (!expected(line, permitted, 1)) {
-      exit(1);
+        exit(1);
     }
     ADVANCE(line);
     permitted[0] = HEX;
-    if (!expected(line, permitted, 2)) {
-      exit(1);
+    if (!pdp8_check_token_type(permitted, line->type, 2)) {
+      // Here i can have a sample instruction, so i should call this function
+        token_to_operation(emul, line, len);
+        return;
     }
     pdp8_register_label(emul, label);
     ADVANCE(line);
@@ -326,6 +331,7 @@ static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
     printf("Parsing error!\n");
     exit(1);
   }
+  printf("Decoding (%zu, %zu): %s\n", head->row, head->col, head->val);
   TokenType *tokens[] = {mri, rri, pseudo, io};
   int lens[] = {7, 12, 8, 6};
 
@@ -337,11 +343,11 @@ static void token_to_operation(pdp8_emul *emul, Token *head, int len) {
 
   for (int i = 0; i < 4; i++) {
     bool checked = pdp8_check_token_type(tokens[i], head->type, lens[i]);
-    printf("type: %d\n", head->type);
     if (checked) {
       printf("Decoded: %s | %s\n", labels[i], head->val);
       getchar();
       parse[i](emul, head, len);
+      printf("Parsed: %s | %s\n", labels[i], head->val);
       return;
     }
   }
